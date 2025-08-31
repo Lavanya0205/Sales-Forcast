@@ -3,89 +3,95 @@ import pandas as pd
 import numpy as np
 import pickle
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import seaborn as sns
 
+# ===============================
 # Load trained model
+# ===============================
 with open("walmart_sales_forecast_model.pkl", "rb") as file:
     model = pickle.load(file)
 
-# Load dataset for plotting and structure
-df = pd.read_csv("walmart_cleaned_no_index.csv")
-# Convert Date column to datetime
-df["Date"] = pd.to_datetime(df["Date"])
-df["Year"] = df["Date"].dt.year
-df["Month"] = df["Date"].dt.month
-df["Week"] = df["Date"].dt.isocalendar().week
-df["DayOfWeek"] = df["Date"].dt.dayofweek
+# ===============================
+# Streamlit Config
+# ===============================
+st.set_page_config(page_title="Walmart Sales Forecasting", layout="wide", page_icon="🛒")
 
-# Drop unnecessary columns
-df.drop(columns=["Date", "IsHoliday", "Dept", "Type", "MarkDown1", "MarkDown2", 
-                 "MarkDown3", "MarkDown4", "MarkDown5"], inplace=True, errors="ignore")
+# ===============================
+# Page Title & Intro
+# ===============================
+st.markdown("<h1 style='text-align: center; color: #FF4B4B;'>🛒 Walmart Weekly Sales Predictor</h1>", unsafe_allow_html=True)
+st.markdown(
+    """
+    <p style='text-align: center; font-size:18px'>
+    Enter store & economic details to forecast <b>weekly sales</b> 📊
+    </p>
+    """, unsafe_allow_html=True
+)
+st.divider()
 
-# Split into features and target
-X = df.drop(columns=["Weekly_Sales"])
-y = df["Weekly_Sales"]
+# ===============================
+# Input Parameters with Sidebar
+# ===============================
+st.sidebar.header("🔧 Input Parameters")
 
-# Split for plotting
-split_index = int(len(df) * 0.8)
-X_test = X.iloc[split_index:]
-y_test = y.iloc[split_index:]
+store = st.sidebar.slider("Store Number", 1, 50, 1)
+temperature = st.sidebar.slider("🌡️ Temperature (°F)", 50.0, 100.0, 70.0)
+fuel_price = st.sidebar.slider("⛽ Fuel Price ($)", 2.0, 5.0, 3.0, 0.01)
+cpi = st.sidebar.slider("📈 CPI (Consumer Price Index)", 200.0, 250.0, 220.0, 0.1)
+unemployment = st.sidebar.slider("💼 Unemployment Rate (%)", 3.0, 15.0, 7.0, 0.1)
+size = st.sidebar.slider("🏬 Store Size (sq ft)", 50000, 250000, 150000, 500)
+year = st.sidebar.selectbox("📅 Year", [2010, 2011, 2012])
+month = st.sidebar.selectbox("📆 Month", list(range(1, 13)))
+week = st.sidebar.selectbox("🗓️ Week", list(range(1, 54)))
+day_of_week = st.sidebar.selectbox("📍 Day of Week (0 = Monday)", list(range(0, 7)))
 
-# Predict
-y_pred = model.predict(X_test)
+input_data = pd.DataFrame({
+    "Store": [store],
+    "Temperature": [temperature],
+    "Fuel_Price": [fuel_price],
+    "CPI": [cpi],
+    "Unemployment": [unemployment],
+    "Size": [size],
+    "Year": [year],
+    "Month": [month],
+    "Week": [week],
+    "DayOfWeek": [day_of_week]
+})
 
-# Streamlit UI
-st.title("🛒 Walmart Weekly Sales Forecasting")
+# ===============================
+# Tabs for Prediction & Info
+# ===============================
+tab1, tab2 = st.tabs(["📌 Predict Sales", "ℹ️ About"])
 
-st.markdown("### 📈 Actual vs. Predicted Sales")
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.plot(np.arange(len(y_test)), y_test.values, label="Actual", linewidth=2)
-ax.plot(np.arange(len(y_test)), y_pred, label="Predicted", linewidth=2)
-ax.set_xlabel("Sample Index")
-ax.set_ylabel("Weekly Sales")
-ax.set_title("Actual vs Predicted Weekly Sales")
-ax.legend()
-st.pyplot(fig)
+with tab1:
+    st.markdown("### Enter the store and economic details and click predict")
+    
+    if st.button("Predict Weekly Sales"):
+        with st.spinner("⏳ Predicting..."):
+            prediction = model.predict(input_data)[0]
+        
+        st.success(f"### ✅ Forecasted Weekly Sales: **${prediction:,.2f}**")
 
-# Metrics
-mae = mean_absolute_error(y_test, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-r2 = r2_score(y_test, y_pred)
+        # Advanced Visualization
+        fig, ax = plt.subplots(figsize=(8, 5))
+        sns.barplot(x=["Predicted Sales"], y=[prediction], palette="Blues_d", ax=ax)
+        ax.set_ylabel("Weekly Sales ($)")
+        ax.set_title("Predicted Weekly Sales")
+        st.pyplot(fig)
+    else:
+        st.info("ℹ️ Fill the inputs on the sidebar and click **Predict Weekly Sales**.")
 
-st.markdown("### 📊 Model Performance Metrics")
-st.write(f"**MAE (Mean Absolute Error):** ${mae:,.2f}")
-st.write(f"**RMSE (Root Mean Squared Error):** ${rmse:,.2f}")
-st.write(f"**R² Score:** {r2:.4f}")
+with tab2:
+    st.markdown("""
+    ### About This App
+    - Built with **Streamlit**, **Pandas**, **NumPy**, and **Matplotlib**.
+    - Predicts weekly sales of Walmart stores based on economic indicators.
+    - 🎯 Ideal for store managers, analysts, and enthusiasts!
+    """)
 
-# Prediction form
-st.markdown("### 🔮 Forecast New Weekly Sales")
+# ===============================
+# Footer
+# ===============================
+st.divider()
 
-# User Inputs
-store = st.number_input("Store Number", min_value=1, max_value=50, value=1)
-temperature = st.number_input("Temperature (°F)", value=70.0)
-fuel_price = st.number_input("Fuel Price", value=3.0)
-cpi = st.number_input("CPI (Consumer Price Index)", value=220.0)
-unemployment = st.number_input("Unemployment Rate", value=7.0)
-size = st.number_input("Store Size (in sq ft)", value=150000)  # ✅ Added this
-year = st.selectbox("Year", [2010, 2011, 2012])
-month = st.selectbox("Month", list(range(1, 13)))
-week = st.selectbox("Week", list(range(1, 54)))
-day_of_week = st.selectbox("Day of Week (0 = Monday)", list(range(0, 7)))
 
-# Predict on user input
-if st.button("📌 Predict Weekly Sales"):
-    input_data = pd.DataFrame({
-        "Store": [store],
-        "Temperature": [temperature],
-        "Fuel_Price": [fuel_price],
-        "CPI": [cpi],
-        "Unemployment": [unemployment],
-        "Size": [size],  # ✅ Must be included!
-        "Year": [year],
-        "Month": [month],
-        "Week": [week],
-        "DayOfWeek": [day_of_week]
-    })
-
-    prediction = model.predict(input_data)[0]
-    st.success(f"📊 Forecasted Weekly Sales: **${prediction:,.2f}**")
